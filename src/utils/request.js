@@ -1,9 +1,18 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+// const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const BASE_URL='/api/v1'
+
+// const request = axios.create({
+//   baseURL: BASE_URL.includes('localhost') ? '/api/v1' : `${BASE_URL}/api/v1`,
+//   timeout: 15000,
+//   headers: {
+//     'Content-Type': 'application/json',
+//   },
+// });
 
 const request = axios.create({
-  baseURL: BASE_URL.includes('localhost') ? '/api/v1' : `${BASE_URL}/api/v1`,
+  baseURL: BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
