@@ -106,7 +106,7 @@ export const generateQuestions = (videoId) => {
 
 // 获取班级整体学情统计
 export const getClassStat = (data) => {
-  return request.get('/stat/class', { params: data });
+  return request.get('/stat/class', { data });
 };
 
 // 获取学生个人学情统计

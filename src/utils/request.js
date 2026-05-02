@@ -3,7 +3,7 @@ import axios from 'axios';
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const request = axios.create({
-  baseURL: BASE_URL.includes('localhost') ? '/api/v1' : `${BASE_URL}/api/v1`,
+  baseURL: BASE_URL,  // 直接使用 BASE_URL，避免重复拼接
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
