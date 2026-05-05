@@ -98,6 +98,22 @@ const VideoDetailEdit = () => {
     }
   }, [editModalOpen, currentPoint]);
 
+
+  // 题目类型中文映射
+  const getQuestionTypeLabel = (type) => {
+    const typeMap = {
+      'choice': '单选题',
+      'single_choice': '单选题',
+      'multiple_choice': '多选题',
+      'true_false': '判断题',
+      'fill_blank': '填空题',
+      'qa': '问答题',
+      'fill': '填空题',
+      'subjective': '主观题'
+    };
+    return typeMap[type] || type || '选择题';
+  };
+  
   const fetchVideoDetail = async () => {
     setLoading(true);
     try {
@@ -113,41 +129,52 @@ const VideoDetailEdit = () => {
       
       setVideoData(detailData);
       
-      // 从视频详情中获取已有关联题目（兼容不同字段名）
-      const questions = detailData?.questions || detailData?.question_list || detailData?.interactions || detailData?.points || [];
-      console.log('从视频详情提取的互动点:', questions);
+      // 从 segments 中提取互动点（每个分段可能有关联的互动点）
+      // API 返回结构：segments[].question 包含该分段的互动点
+      let questions = [];
+      if (segments && segments.length > 0) {
+        questions = segments
+          .filter(seg => seg.question && Object.keys(seg.question).length > 0) // 过滤掉空对象
+          .map(seg => ({
+            ...seg.question,
+            segment_id: seg.id,  // 保存分段的 id 作为 segment_id
+            time: seg.start      // 使用分段的 start 时间作为互动点时间
+          }));
+      }
+      
+      console.log('从视频分段提取的互动点:', questions);
       if (questions.length > 0) {
         console.log('第一个互动点字段:', Object.keys(questions[0]));
       }
       
-      // 为没有 time 字段的互动点尝试通过 segment_id 映射时间
+      // 处理互动点：为每个互动点添加中文类型标签和时间
       const processedQuestions = questions.map((q, idx) => {
-        // 确保 segment_id 不为 null，设置默认值
-        const segmentId = q.segment_id ?? (segments.length > 0 ? segments[0].id : 0);
+        // 确保 segment_id 不为 null
+        const segmentId = q.segment_id ?? q.segmentId ?? (segments.length > 0 ? segments[0].id : 0);
         
-        if (q.time !== undefined && q.time !== null) {
-          return { ...q, segment_id: segmentId }; // 确保 segment_id 不为 null
-        }
-        
-        // 尝试通过 segment_id 查找时间
-        if (segmentId && segments.length > 0) {
-          const segment = segments.find(s => s.id === segmentId);
+        // 通过 segment_id 查找对应分段的时间
+        let time = 0;
+        if (segments.length > 0) {
+          const segment = segments.find(s => s.id === segmentId || s.segment_id === segmentId);
           if (segment) {
-            return { ...q, time: segment.start || segment.end || 0, segment_id: segmentId };
+            time = segment.start || segment.end || 0;
           }
         }
         
-        // 如果 segments 有数据但找不到对应分段，平均分配时间
-        if (segments.length > 0) {
-          const avgTime = (detailData.duration / (questions.length + 1)) * (idx + 1);
-          return { ...q, time: Math.floor(avgTime), segment_id: segmentId };
+        // 如果找不到对应分段但有 segments，平均分配时间
+        if (time === 0 && segments.length > 0 && questions.length > 0) {
+          time = Math.floor((detailData.duration / (questions.length + 1)) * (idx + 1));
         }
         
-        // 如果都找不到，设置一个默认值
-        return { ...q, time: 0, segment_id: segmentId };
+        return {
+          ...q,
+          segment_id: segmentId,
+          time: time,
+          typeLabel: getQuestionTypeLabel(q.type || q.question_type) // 添加中文类型标签
+        };
       });
       
-      console.log('处理后的互动点（含time字段）:', processedQuestions);
+      console.log('处理后的互动点（含time和typeLabel字段）:', processedQuestions);
       setPointList(processedQuestions);
     } catch (error) {
       console.error('获取视频详情失败:', error);
@@ -328,7 +355,7 @@ const VideoDetailEdit = () => {
     try {
       const publishData = {
         video_id: parseInt(videoId),
-        class_id: parseInt(selectedClassId)
+        class_list: [parseInt(selectedClassId)]  // 修改为 class_list 数组格式
       };
       console.log('发布视频到班级，请求数据:', publishData);
       
@@ -468,8 +495,13 @@ const VideoDetailEdit = () => {
             {/* 互动点标记 */}
             {pointList.map((point, idx) => {
               const title = point.title ?? point.question_title ?? point.questionTitle ?? '互动点';
-              const type = point.type ?? point.question_type ?? point.questionType ?? '选择题';
-              const rawTime = point.time ?? point.insert_time ?? point.insertTime ?? 0;
+              // 优先使用 typeLabel，否则根据 type 映射
+              const type = point.typeLabel || getQuestionTypeLabel(point.type ?? point.question_type ?? point.questionType);
+              // 时间处理：如果时间超过10000，可能是毫秒格式，转换为秒
+              let rawTime = point.time ?? point.insert_time ?? point.insertTime ?? 0;
+              if (rawTime > 10000) {
+                rawTime = rawTime / 1000; // 毫秒转秒
+              }
               const timeValue = parseFloat(rawTime) || 0;
               const percent = duration > 0 && timeValue > 0 ? (timeValue / duration) * 100 : 0;
               return (
@@ -483,7 +515,8 @@ const VideoDetailEdit = () => {
                     width: 16,
                     height: 16,
                     borderRadius: '50%',
-                    background: type === '选择题' ? '#1890ff' : 
+                    background: type === '单选题' || type === '选择题' ? '#1890ff' : 
+                               type === '多选题' ? '#722ed1' :
                                type === '判断题' ? '#52c41a' : 
                                type === '填空题' ? '#faad14' : '#722ed1',
                     border: '3px solid white',
@@ -491,7 +524,7 @@ const VideoDetailEdit = () => {
                     boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                     zIndex: 10
                   }}
-                  title={`${title} (${timeValue}秒)`}
+                  title={`${title} (${type}) - ${timeValue}秒`}
                   onClick={(e) => {
                     e.stopPropagation();
                     seekTo(timeValue);
@@ -726,8 +759,13 @@ const VideoDetailEdit = () => {
           <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', padding: '0 4px' }}>
             {pointList.map((item, index) => {
               const title = item.title ?? item.question_title ?? item.questionTitle ?? '无标题';
-              const type = item.type ?? item.question_type ?? item.questionType ?? '未知';
-              const timeValue = item.time ?? item.insert_time ?? item.insertTime ?? 0;
+              // 优先使用 typeLabel，否则调用映射函数
+              const type = item.typeLabel || getQuestionTypeLabel(item.type ?? item.question_type ?? item.questionType ?? '');
+              // 时间处理：如果时间超过10000，可能是毫秒格式，转换为秒
+              let timeValue = item.time ?? item.insert_time ?? item.insertTime ?? 0;
+              if (timeValue > 10000) {
+                timeValue = timeValue / 1000; // 毫秒转秒
+              }
               const id = item.id ?? item.question_id ?? index;
               const answer = item.answer ?? item.correctAnswer ?? item.right_answer ?? '';
               const analysis = item.analysis ?? item.explanation ?? '';
@@ -735,6 +773,8 @@ const VideoDetailEdit = () => {
               
               // 类型映射和样式
               const typeMapping = {
+                '单选题': { bg: '#e6f7ff', color: '#1890ff', border: '#91d5ff', accent: '#1890ff' },
+                '多选题': { bg: '#f9f0ff', color: '#722ed1', border: '#d3adf7', accent: '#722ed1' },
                 '选择题': { bg: '#e6f7ff', color: '#1890ff', border: '#91d5ff', accent: '#1890ff' },
                 '判断题': { bg: '#f6ffed', color: '#52c41a', border: '#b7eb8f', accent: '#52c41a' },
                 '简答题': { bg: '#fff7e6', color: '#fa8c16', border: '#ffd591', accent: '#fa8c16' },
@@ -743,7 +783,7 @@ const VideoDetailEdit = () => {
               const typeStyle = typeMapping[type] || { bg: '#f5f5f5', color: '#666', border: '#d9d9d9', accent: '#666' };
               
               // 判断是否为选择题
-              const isChoice = type === '选择题' || type?.toLowerCase().includes('choice');
+              const isChoice = type === '选择题' || type === '单选题' || type === '多选题' || type?.toLowerCase().includes('choice');
               // 判断是否为判断题
               const isJudge = type === '判断题' || type?.toLowerCase().includes('judge') || type?.toLowerCase().includes('true_false');
               // 判断是否为简答题
