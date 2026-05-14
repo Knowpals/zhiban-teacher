@@ -106,7 +106,7 @@ export const generateQuestions = (videoId) => {
 
 // 获取班级整体学情统计
 export const getClassStat = (data) => {
-  return request.get('/stat/class', { data });
+  return request.post('/stat/class', data);
 };
 
 // 获取学生个人学情统计
@@ -143,12 +143,12 @@ export const generateQuiz = (data) => {
 
 // ==================== 视频审核相关 ====================
 
-// 发布视频
-export const publishVideo = (videoId) => {
-  return request.post(`/video/${videoId}/review/publish`);
-};
-
 // 视频进入审核
 export const startVideoReview = (videoId) => {
-  return request.post(`/video/${videoId}/review/start`, { video_id: videoId });
+  return request.post(`/video/${videoId}/review/start`);
+};
+
+// 发布视频（审核通过后发布）
+export const publishVideo = (videoId) => {
+  return request.post(`/video/${videoId}/review/publish`);
 };

@@ -6,7 +6,7 @@ import {
 import { PlusOutlined, RobotOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../components/MainLayout';
-import { getVideoDetail, generateQuestions, postVideoToClass, getMyCreatedClasses, publishVideo } from '../services/api';
+import { getVideoDetail, generateQuestions, postVideoToClass, getMyCreatedClasses, publishVideo, startVideoReview } from '../services/api';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -129,10 +129,10 @@ const VideoDetailEdit = () => {
       
       setVideoData(detailData);
       
-      // 从 segments 中提取互动点（每个分段可能有关联的互动点）
-      // API 返回结构：segments[].question 包含该分段的互动点
-      let questions = [];
-      if (segments && segments.length > 0) {
+      // 优先从顶级 questions 字段获取互动点（新接口）
+      // 如果不存在则回退到从 segments 中提取（旧接口兼容）
+      let questions = detailData?.questions || [];
+      if (questions.length === 0 && segments && segments.length > 0) {
         questions = segments
           .filter(seg => seg.question && Object.keys(seg.question).length > 0) // 过滤掉空对象
           .map(seg => ({
@@ -209,17 +209,28 @@ const VideoDetailEdit = () => {
       return;
     }
     
-    // 如果视频未发布，需要先发布视频
+    // 如果视频未发布，需要先提交审核，再发布
     if (currentStatus !== 'published') {
       try {
-        // 直接发布视频（跳过审核步骤）
+        // 1. 先提交视频进入审核
+        message.loading({ content: '视频审核中...', key: 'publish-video', duration: 0 });
+        console.log('开始提交审核, videoId:', videoId);
+        await startVideoReview(videoId);
+        console.log('审核提交成功');
+        
+        // 2. 再发布视频
         message.loading({ content: '视频发布中...', key: 'publish-video', duration: 0 });
+        console.log('开始发布视频, videoId:', videoId);
         await publishVideo(videoId);
+        console.log('视频发布成功');
+        
         message.success({ content: '视频发布成功！', key: 'publish-video', duration: 2 });
         // 刷新视频详情并更新本地状态
         const res = await getVideoDetail(videoId);
         setVideoData(res.data);
       } catch (error) {
+        console.error('视频发布失败:', error);
+        console.error('错误详情:', error.response?.data);
         const errorMsg = error.response?.data?.msg || error.response?.data?.message || error.message || '视频发布失败';
         message.error({ content: errorMsg, key: 'publish-video', duration: 3 });
         return;

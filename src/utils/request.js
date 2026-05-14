@@ -13,7 +13,7 @@ const BASE_URL='/api/v1'
 
 const request = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 30000, // 增加到30秒
   headers: {
     'Content-Type': 'application/json',
   },
@@ -47,13 +47,14 @@ request.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status, data } = error.response;
+      console.error('请求错误:', status, data);
       if (status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
       }
       // 保留完整的错误对象，包含 response 信息
       return Promise.reject({
-        message: data.msg || data.message || '请求失败',
+        message: data.msg || data.message || data.error || `请求失败(${status})`,
         response: error.response,
         status
       });

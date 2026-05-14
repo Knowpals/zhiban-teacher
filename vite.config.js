@@ -7,9 +7,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://101.35.247.221:8080', // 后端服务器地址
+        target: 'https://teacher.knowpals.xyz', // 后端服务器地址
         changeOrigin: true,
-        rewrite: (path) => path,
+        secure: false, // 允许 HTTPS 自签名证书
       },
     },
   },
